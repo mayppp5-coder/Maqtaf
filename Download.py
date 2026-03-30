@@ -43,18 +43,21 @@ def callback_query(call):
     bot.edit_message_text("⚡ **فـزعـة جاري التحميل... ثواني ويصلك**", call.message.chat.id, call.message.message_id)
 
     # تم تصحيح المسافات هنا لتعمل بشكل سليم داخل الدوال
-    ydl_opts = {
+     ydl_opts = {
         'format': 'best',
         'outtmpl': f'Faz3a_{call.from_user.id}.%(ext)s',
         'no_warnings': True,
         'quiet': True,
         'nocheckcertificate': True,
-        # التعديل السحري هنا: نستخدم مشغلات مختلفة لتخطي تسجيل الدخول
+        # الخدعة الجديدة: نطلب من يوتيوب التعامل معنا كمشغل خارجي (Embed)
         'extractor_args': {
             'youtube': {
-                'player_client': ['android_testsuite', 'web_creator', 'tvicap'],
+                'player_client': ['web_embedded', 'mweb'],
+                'player_skip': ['webpage', 'configs'],
             }
         },
+        # إضافة وكيل مستخدم (User-Agent) خاص بالموبايل لزيادة التمويه
+        'user_agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36'
     }
 
 
