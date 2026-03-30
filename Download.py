@@ -1,10 +1,9 @@
-
 import telebot
 import yt_dlp
 import os
 from telebot import types
 
-# ضع التوكن الخاص بك هنا
+# التوكن الخاص بك
 TOKEN = "8646400281:AAFQAejRPcDfpGnBreUFziNzix0m7D8DKuA"
 
 bot = telebot.TeleBot(TOKEN)
@@ -12,7 +11,6 @@ bot = telebot.TeleBot(TOKEN)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_name = message.from_user.first_name
-    # واجهة الترحيب باسم "فزعة" بشكل مميز
     welcome_text = (
         f"🛡️ **هـلا بـيـك يـا {user_name} فـي بـوت [ فـزعـة ]** 🛡️\n\n"
         "أنا فزعتك لتحميل أي فيديو يخطر ببالك من:\n"
@@ -29,15 +27,9 @@ def handle_message(message):
         bot.reply_to(message, "⚠️ يا طيب، أرسل رابط صحيح حتى أقدر أفزعلك!")
         return
 
-    # إنشاء الأزرار الملونة بشكل مربعات واضحة
     markup = types.InlineKeyboardMarkup(row_width=1)
-    
-    # الزر الأحمر للفيديو
     btn_video = types.InlineKeyboardButton("🔴 تـحـمـيـل فـيـديـو (MP4) 🔴", callback_data=f"video|{url}")
-    
-    # الزر الأزرق للصوت
     btn_audio = types.InlineKeyboardButton("🔵 تـحـمـيـل صـوت (MP3) 🔵", callback_data=f"audio|{url}")
-    
     markup.add(btn_video, btn_audio)
 
     bot.reply_to(message, "تـم استلام الرابط! شـتـريد أحمل لك؟ 👇", reply_markup=markup)
@@ -50,26 +42,20 @@ def callback_query(call):
     
     bot.edit_message_text("⚡ **فـزعـة جاري التحميل... ثواني ويصلك**", call.message.chat.id, call.message.message_id)
 
-        ydl_opts = {
+    # تم تصحيح المسافات هنا لتعمل بشكل سليم داخل الدوال
+    ydl_opts = {
         'format': 'best',
         'outtmpl': f'Faz3a_{call.from_user.id}.%(ext)s',
         'no_warnings': True,
         'quiet': True,
         'nocheckcertificate': True,
-        # هذه الإعدادات تجعل يوتيوب يظن أنك تطبيق موبايل رسمي
         'extractor_args': {
             'youtube': {
                 'player_client': ['ios', 'android'],
                 'player_skip': ['webpage', 'configs'],
             }
         },
-        'postprocessor_args': [
-            '-c:v', 'copy',
-        ],
     }
-
-
-
 
     if action == 'audio':
         ydl_opts['postprocessors'] = [{
@@ -93,6 +79,6 @@ def callback_query(call):
         
         os.remove(filename) 
     except Exception as e:
-        bot.send_message(call.message.chat.id, "❌ عذراً، صار خلل بسيط بالتحميل. جرب رابط ثاني!")
+        bot.send_message(call.message.chat.id, f"❌ عذراً، صار خلل بالتحميل.\nالسبب التقني: {str(e)[:50]}...")
 
 bot.polling()
