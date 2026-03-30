@@ -1,58 +1,83 @@
+
 import telebot
 import yt_dlp
 import os
+from telebot import types
 
-# ضع توكن البوت الجديد الذي أنشأته من BotFather هنا
-TOKEN ="8646400281:AAFQAejRPcDfpGnBreUFziNzix0m7D8DKuA"
-
+# ضع التوكن الخاص بك هنا
+TOKEN = "8646400281:AAFQAejRPcDfpGnBreUFziNzix0m7D8DKuA"
 
 bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_name = message.from_user.first_name
+    # واجهة الترحيب باسم "فزعة" بشكل مميز
     welcome_text = (
-        f"أهلاً بك يا {user_name} في بوت مقطف! 🚀\n\n"
-        "أنا مساعدك الذكي لتحميل الفيديوهات من:\n"
-        "✅ تيك توك | ✅ إنستقرام | ✅ يوتيوب\n\n"
-        "فقط أرسل لي رابط الفيديو، واترك الباقي عليّ! 😎"
+        f"🛡️ **هـلا بـيـك يـا {user_name} فـي بـوت [ فـزعـة ]** 🛡️\n\n"
+        "أنا فزعتك لتحميل أي فيديو يخطر ببالك من:\n"
+        "تيك توك 🎶 | إنستقرام 📸 | يوتيوب 🎥 | فيسبوك 💙\n\n"
+        "🚀 **طريقة الاستخدام:**\n"
+        "أرسل الرابط هنا.. واترك الباقي على فزعة!"
     )
-    bot.reply_to(message, welcome_text)
-
+    bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     url = message.text
-    
-    # التأكد أن الرسالة تحتوي على رابط
     if not url.startswith("http"):
-        bot.reply_to(message, "الرجاء إرسال رابط صحيح 🔗")
+        bot.reply_to(message, "⚠️ يا طيب، أرسل رابط صحيح حتى أقدر أفزعلك!")
         return
 
-    sent_msg = bot.reply_to(message, "جاري المعالجة والتحميل.. انتظر قليلاً ⏳")
+    # إنشاء الأزرار الملونة بشكل مربعات واضحة
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    
+    # الزر الأحمر للفيديو
+    btn_video = types.InlineKeyboardButton("🔴 تـحـمـيـل فـيـديـو (MP4) 🔴", callback_data=f"video|{url}")
+    
+    # الزر الأزرق للصوت
+    btn_audio = types.InlineKeyboardButton("🔵 تـحـمـيـل صـوت (MP3) 🔵", callback_data=f"audio|{url}")
+    
+    markup.add(btn_video, btn_audio)
 
-    # إعدادات المكتبة لتحميل أفضل جودة بصيغة mp4
+    bot.reply_to(message, "تـم استلام الرابط! شـتـريد أحمل لك؟ 👇", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    data = call.data.split("|")
+    action = data[0]
+    url = data[1]
+    
+    bot.edit_message_text("⚡ **فـزعـة جاري التحميل... ثواني ويصلك**", call.message.chat.id, call.message.message_id)
+
     ydl_opts = {
-        'format': 'best',
-        'outtmpl': 'video.mp4', # اسم الملف المؤقت
-        'quiet': True,
-        'no_warnings': True,
+        'format': 'bestvideo+bestaudio/best' if action == 'video' else 'bestaudio/best',
+        'outtmpl': f'Faz3a_{call.from_user.id}.%(ext)s',
+        'quiet': True
     }
+
+    if action == 'audio':
+        ydl_opts['postprocessors'] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }]
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        
-        # إرسال الفيديو بعد التحميل
-        with open('video.mp4', 'rb') as video:
-            bot.send_video(message.chat.id, video, caption="تم التحميل بنجاح ✅")
-        
-        # حذف الملف من جهازك (أو السيرفر) بعد الإرسال لتوفير المساحة
-        os.remove('video.mp4')
-        bot.delete_message(message.chat.id, sent_msg.message_id)
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            if action == 'audio':
+                filename = filename.rsplit('.', 1)[0] + '.mp3'
 
+        with open(filename, 'rb') as f:
+            if action == 'video':
+                bot.send_video(call.message.chat.id, f, caption="تم التحميل بواسطة بوت فزعة 🛡️")
+            else:
+                bot.send_audio(call.message.chat.id, f, caption="تم تحويل الصوت بواسطة بوت فزعة 🛡️")
+        
+        os.remove(filename) 
     except Exception as e:
-        bot.edit_message_text(f"حدث خطأ أثناء التحميل: {e}", message.chat.id, sent_msg.message_id)
+        bot.send_message(call.message.chat.id, "❌ عذراً، صار خلل بسيط بالتحميل. جرب رابط ثاني!")
 
-print("البوت يعمل الآن.. جرب إرسال رابط!")
-bot.infinity_polling()
+bot.polling()
