@@ -43,7 +43,7 @@ def callback_query(call):
     bot.edit_message_text("⚡ **فـزعـة جاري التحميل... ثواني ويصلك**", call.message.chat.id, call.message.message_id)
 
     # تم تصحيح المسافات هنا لتعمل بشكل سليم داخل الدوال
-        ydl_opts = {
+    ydl_opts = {
         'format': 'best',
         'outtmpl': f'Faz3a_{call.from_user.id}.%(ext)s',
         'no_warnings': True,
