@@ -10,7 +10,15 @@ bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "أهلاً بك! أرسل لي رابط فيديو من (TikTok, Instagram, YouTube) وسأقوم بتحميله لك. 🚀")
+    user_name = message.from_user.first_name
+    welcome_text = (
+        f"أهلاً بك يا {user_name} في بوت مقطف! 🚀\n\n"
+        "أنا مساعدك الذكي لتحميل الفيديوهات من:\n"
+        "✅ تيك توك | ✅ إنستقرام | ✅ يوتيوب\n\n"
+        "فقط أرسل لي رابط الفيديو، واترك الباقي عليّ! 😎"
+    )
+    bot.reply_to(message, welcome_text)
+
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
