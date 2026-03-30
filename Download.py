@@ -43,19 +43,20 @@ def callback_query(call):
     bot.edit_message_text("⚡ **فـزعـة جاري التحميل... ثواني ويصلك**", call.message.chat.id, call.message.message_id)
 
     # تم تصحيح المسافات هنا لتعمل بشكل سليم داخل الدوال
-    ydl_opts = {
+        ydl_opts = {
         'format': 'best',
         'outtmpl': f'Faz3a_{call.from_user.id}.%(ext)s',
         'no_warnings': True,
         'quiet': True,
         'nocheckcertificate': True,
+        # التعديل السحري هنا: نستخدم مشغلات مختلفة لتخطي تسجيل الدخول
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'android'],
-                'player_skip': ['webpage', 'configs'],
+                'player_client': ['android_testsuite', 'web_creator', 'tvicap'],
             }
         },
     }
+
 
     if action == 'audio':
         ydl_opts['postprocessors'] = [{
