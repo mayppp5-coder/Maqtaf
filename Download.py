@@ -50,11 +50,26 @@ def callback_query(call):
     
     bot.edit_message_text("⚡ **فـزعـة جاري التحميل... ثواني ويصلك**", call.message.chat.id, call.message.message_id)
 
-    ydl_opts = {
-        'format': 'bestvideo+bestaudio/best' if action == 'video' else 'bestaudio/best',
+        ydl_opts = {
+        'format': 'best',
         'outtmpl': f'Faz3a_{call.from_user.id}.%(ext)s',
-        'quiet': True
+        'no_warnings': True,
+        'quiet': True,
+        'nocheckcertificate': True,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'ar,en-us,en;q=0.5',
+            'Connection': 'keep-alive',
+        },
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],
+                'skip': ['hls', 'dash']
+            }
+        }
     }
+
 
     if action == 'audio':
         ydl_opts['postprocessors'] = [{
