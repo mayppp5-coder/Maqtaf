@@ -42,24 +42,21 @@ def callback_query(call):
     
     bot.edit_message_text("⚡ **فـزعـة جاري التحميل... ثواني ويصلك**", call.message.chat.id, call.message.message_id)
 
-    # تم تصحيح المسافات هنا لتعمل بشكل سليم داخل الدوال
-     ydl_opts = {
+    # تم تصحيح المسافات هنا بدقة (مهم جداً للبايثون)
+    ydl_opts = {
         'format': 'best',
         'outtmpl': f'Faz3a_{call.from_user.id}.%(ext)s',
         'no_warnings': True,
         'quiet': True,
         'nocheckcertificate': True,
-        # الخدعة الجديدة: نطلب من يوتيوب التعامل معنا كمشغل خارجي (Embed)
+        # استخدام مشغلات تدعم المشاهدة بدون تسجيل دخول
         'extractor_args': {
             'youtube': {
-                'player_client': ['web_embedded', 'mweb'],
-                'player_skip': ['webpage', 'configs'],
+                'player_client': ['android_testsuite', 'web_embedded'],
             }
         },
-        # إضافة وكيل مستخدم (User-Agent) خاص بالموبايل لزيادة التمويه
-        'user_agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36'
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     }
-
 
     if action == 'audio':
         ydl_opts['postprocessors'] = [{
@@ -72,8 +69,11 @@ def callback_query(call):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
+            # تصحيح اسم الملف في حالة الصوت
             if action == 'audio':
-                filename = filename.rsplit('.', 1)[0] + '.mp3'
+                base, ext = os.path.splitext(filename)
+                new_filename = base + '.mp3'
+                filename = new_filename
 
         with open(filename, 'rb') as f:
             if action == 'video':
@@ -81,8 +81,15 @@ def callback_query(call):
             else:
                 bot.send_audio(call.message.chat.id, f, caption="تم تحويل الصوت بواسطة بوت فزعة 🛡️")
         
-        os.remove(filename) 
+        if os.path.exists(filename):
+            os.remove(filename) 
+
     except Exception as e:
-        bot.send_message(call.message.chat.id, f"❌ عذراً، صار خلل بالتحميل.\nالسبب التقني: {str(e)[:50]}...")
+        # تقصير رسالة الخطأ لتكون واضحة للمستخدم
+        error_msg = str(e)
+        if "Sign in to confirm" in error_msg:
+            bot.send_message(call.message.chat.id, "❌ يوتيوب يطلب تسجيل دخول حالياً، جرب رابط آخر أو تيك توك.")
+        else:
+            bot.send_message(call.message.chat.id, f"❌ عذراً، صار خلل بالتحميل.\n{error_msg[:100]}")
 
 bot.polling()
