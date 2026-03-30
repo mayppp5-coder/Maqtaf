@@ -42,17 +42,17 @@ def callback_query(call):
     
     bot.edit_message_text("⚡ **فـزعـة جاري التحميل... ثواني ويصلك**", call.message.chat.id, call.message.message_id)
 
-    # تم تصحيح المسافات هنا بدقة (مهم جداً للبايثون)
+    # إعدادات التحميل - تم تصحيح المسافات هنا بدقة
     ydl_opts = {
+        # اختيار 'best' يحل مشكلة Requested format is not available
         'format': 'best',
         'outtmpl': f'Faz3a_{call.from_user.id}.%(ext)s',
         'no_warnings': True,
         'quiet': True,
         'nocheckcertificate': True,
-        # استخدام مشغلات تدعم المشاهدة بدون تسجيل دخول
         'extractor_args': {
             'youtube': {
-                'player_client': ['android_testsuite', 'web_embedded'],
+                'player_client': ['android', 'web_embedded'],
             }
         },
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
@@ -69,11 +69,16 @@ def callback_query(call):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            # تصحيح اسم الملف في حالة الصوت
+            
+            # معالجة اسم الملف في حال كان المطلوب صوتاً
             if action == 'audio':
                 base, ext = os.path.splitext(filename)
                 new_filename = base + '.mp3'
-                filename = new_filename
+                # التأكد من تغيير اسم الملف يدوياً إذا لم يقم البرنامج بذلك
+                if os.path.exists(new_filename):
+                    filename = new_filename
+                elif os.path.exists(base + '.webm'):
+                     filename = base + '.webm' # في حال فشل التحويل مؤقتاً
 
         with open(filename, 'rb') as f:
             if action == 'video':
@@ -85,11 +90,10 @@ def callback_query(call):
             os.remove(filename) 
 
     except Exception as e:
-        # تقصير رسالة الخطأ لتكون واضحة للمستخدم
         error_msg = str(e)
         if "Sign in to confirm" in error_msg:
-            bot.send_message(call.message.chat.id, "❌ يوتيوب يطلب تسجيل دخول حالياً، جرب رابط آخر أو تيك توك.")
+            bot.send_message(call.message.chat.id, "❌ يوتيوب طلب تسجيل دخول. جرب رابط آخر أو فيديو قصير.")
         else:
-            bot.send_message(call.message.chat.id, f"❌ عذراً، صار خلل بالتحميل.\n{error_msg[:100]}")
+            bot.send_message(call.message.chat.id, f"❌ عذراً، صار خلل بالتحميل.\nالسبب: {error_msg[:100]}")
 
-bot.polling()
+bot.polling(none_stop=True)
