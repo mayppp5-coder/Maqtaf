@@ -3,105 +3,66 @@ import google.generativeai as genai
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# --- الإعدادات (بياناتك الخاصة) ---
+# --- البيانات ---
 TELEGRAM_TOKEN = "8669525251:AAGQSRVc_0_jEiZJnX7p_KoVAoULuukXS0s"
 GEMINI_API_KEY = "AIzaSyAWys1l4PQ4AIhxdjl8WC2txctV3UQ15Uw"
 
-# إعداد الذكاء الاصطناعي (تم استخدام flash للسرعة القصوى)
+# إعداد الذكاء الاصطناعي مع إيقاف فلاتر الأمان (لضمان الاستجابة)
 genai.configure(api_key=GEMINI_API_KEY)
-ai_model = genai.GenerativeModel('gemini-1.5-flash')
+generation_config = {"temperature": 0.7, "top_p": 1, "top_k": 1, "max_output_tokens": 500}
+safety_settings = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+]
 
-# إعداد السجلات (Logging) لمراقبة الأداء في Railway
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
-    level=logging.INFO
+ai_model = genai.GenerativeModel(
+    model_name='gemini-1.5-flash',
+    generation_config=generation_config,
+    safety_settings=safety_settings
 )
-logger = logging.getLogger(__name__)
-
-# --- وظائف توليد المحتوى ---
 
 async def get_ai_title():
-    """توليد عنوان قصة قصير جداً وسريع"""
     try:
-        # طلب عنوان مختصر لضمان سرعة الاستجابة
-        prompt = "أعطني عنوان قصة مشوق ومختصر جداً (3 كلمات فقط). بدون مقدمات."
-        response = ai_model.generate_content(prompt)
-        title = response.text.strip().replace("*", "").replace("#", "")
-        return title if title else "سر الغابة المفقودة"
-    except Exception as e:
-        logger.error(f"Error generating title: {e}")
-        return "حكاية من وراء الأفق"
+        response = ai_model.generate_content("اعطني عنوان قصة قصير جدا (3 كلمات)")
+        return response.text.strip() if response.text else "سر الغموض"
+    except:
+        return "حكاية غريبة"
 
 async def get_ai_story(title):
-    """توليد القصة الكاملة بناءً على العنوان"""
     try:
-        prompt = f"اكتب قصة قصيرة جداً ومثيرة بناءً على هذا العنوان: {title}. اجعلها مشوقة ومع ايموجي."
-        response = ai_model.generate_content(prompt)
-        return response.text
+        # إضافة تعليمات صريحة للذكاء الاصطناعي ليكون سريعاً
+        response = ai_model.generate_content(f"اكتب قصة قصيرة جدا عن: {title}")
+        if response.text:
+            return response.text
+        return "لم أستطع تأليف القصة، جرب عنواناً آخر."
     except Exception as e:
-        logger.error(f"Error generating story: {e}")
-        return "عذراً صديقي، يبدو أن جنيّ القصص مشغول الآن! حاول مرة أخرى بعد لحظات. 😅"
-
-# --- وظائف التعامل مع البوت ---
+        print(f"Error: {e}")
+        return "حدث خطأ في الاتصال بذكاء Google، حاول مرة أخرى."
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عند إرسال /start أو الدخول للبوت"""
     title = await get_ai_title()
-    
-    keyboard = [
-        [InlineKeyboardButton(f"📖 قراءة: {title}", callback_data=f"read|{title}")],
-        [InlineKeyboardButton("🔄 أريد عنواناً آخر", callback_data="next")]
-    ]
-    
-    await update.message.reply_text(
-        "✨ أهلاً بك في بوت القصص الذكي!\n\n"
-        "لقد اخترت لك هذا العنوان المشوق، هل ترغب في قراءتها؟",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    keyboard = [[InlineKeyboardButton(f"📖 قراءة: {title}", callback_data=f"read|{title}")],
+                [InlineKeyboardButton("🔄 عنوان آخر", callback_data="next")]]
+    await update.message.reply_text("✨ هل تريد قصة اليوم؟", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة الضغط على الأزرار"""
     query = update.callback_query
-    await query.answer() # لإزالة علامة التحميل من زر التليجرام
-    
+    await query.answer()
     if query.data == "next":
-        # توليد عنوان جديد فوراً
         title = await get_ai_title()
-        keyboard = [
-            [InlineKeyboardButton(f"📖 قراءة: {title}", callback_data=f"read|{title}")],
-            [InlineKeyboardButton("🔄 قصة أخرى", callback_data="next")]
-        ]
-        await query.edit_message_text(
-            f"ما رأيك بهذا العنوان الجديد؟\n\n🔹 **{title}**",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-    
+        keyboard = [[InlineKeyboardButton(f"📖 قراءة: {title}", callback_data=f"read|{title}")],
+                    [InlineKeyboardButton("🔄 قصة أخرى", callback_data="next")]]
+        await query.edit_message_text(f"العنوان: **{title}**", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     elif query.data.startswith("read|"):
         title = query.data.split("|")[1]
-        
-        # رسالة مؤقتة تشعر المستخدم بأن البوت يعمل
-        await query.edit_message_text(f"✍️ جاري كتابة قصة: **{title}**...\nلحظات قليلة من فضلك ✨")
-        
-        story_text = await get_ai_story(title)
-        
-        keyboard = [[InlineKeyboardButton("🔄 قصة جديدة", callback_data="next")]]
-        
-        # إرسال القصة النهائية
-        await query.message.reply_text(
-            f"📖 **{title}**\n\n{story_text}",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-
-# --- تشغيل المحرك ---
+        await query.edit_message_text(f"⏳ جاري التأليف...")
+        story = await get_ai_story(title)
+        await query.message.reply_text(f"📖 **{title}**\n\n{story}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 قصة جديدة", callback_data="next")]]), parse_mode="Markdown")
 
 if __name__ == '__main__':
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-    
-    # إضافة المعالجات (Handlers)
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(handle_buttons))
-    
-    print("🚀 البوت انطلق الآن...")
-    application.run_polling()
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(handle_buttons))
+    app.run_polling()
