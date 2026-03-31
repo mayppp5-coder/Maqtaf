@@ -1,94 +1,69 @@
-import telebot
-import yt_dlp
-import os
-from telebot import types
+import logging
+import google.generativeai as genai
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# التوكن الخاص بك
-TOKEN = "8646400281:AAFQAejRPcDfpGnBreUFziNzix0m7D8DKuA"
+# --- الإعدادات (بياناتك الخاصة) ---
+TELEGRAM_TOKEN = "8669525251:AAGQSRVc_0_jEiZJnX7p_KoVAoULuukXS0s"
+GEMINI_API_KEY = "AIzaSyAWys1l4PQ4AIhxdjl8WC2txctV3UQ15Uw"
 
-bot = telebot.TeleBot(TOKEN)
+# إعداد الذكاء الاصطناعي
+genai.configure(api_key=GEMINI_API_KEY)
+ai_model = genai.GenerativeModel('gemini-pro')
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    user_name = message.from_user.first_name
-    welcome_text = (
-        f"🛡️ **هـلا بـيـك يـا {user_name} فـي بـوت [ فـزعـة ]** 🛡️\n\n"
-        "أنا فزعتك لتحميل أي فيديو يخطر ببالك من:\n"
-        "تيك توك 🎶 | إنستقرام 📸 | يوتيوب 🎥 | فيسبوك 💙\n\n"
-        "🚀 **طريقة الاستخدام:**\n"
-        "أرسل الرابط هنا.. واترك الباقي على فزعة!"
-    )
-    bot.reply_to(message, welcome_text, parse_mode="Markdown")
+# إعداد السجلات (Logging)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
-    url = message.text
-    if not url.startswith("http"):
-        bot.reply_to(message, "⚠️ يا طيب، أرسل رابط صحيح حتى أقدر أفزعلك!")
-        return
-
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    btn_video = types.InlineKeyboardButton("🔴 تـحـمـيـل فـيـديـو (MP4) 🔴", callback_data=f"video|{url}")
-    btn_audio = types.InlineKeyboardButton("🔵 تـحـمـيـل صـوت (MP3) 🔵", callback_data=f"audio|{url}")
-    markup.add(btn_video, btn_audio)
-
-    bot.reply_to(message, "تـم استلام الرابط! شـتـريد أحمل لك؟ 👇", reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
-    data = call.data.split("|")
-    action = data[0]
-    url = data[1]
-    
-    bot.edit_message_text("⚡ **فـزعـة جاري التحميل... ثواني ويصلك**", call.message.chat.id, call.message.message_id)
-
-    # إعدادات التحميل - تم ترتيب المسافات بدقة
-    ydl_opts = {
-        'format': 'best',
-        'outtmpl': f'Faz3a_{call.from_user.id}.%(ext)s',
-        'no_warnings': True,
-        'quiet': True,
-        'nocheckcertificate': True,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web_embedded'],
-            }
-        },
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-    }
-
-    if action == 'audio':
-        ydl_opts['postprocessors'] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }]
-
+async def get_ai_title():
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            
-            if action == 'audio':
-                base, ext = os.path.splitext(filename)
-                new_filename = base + '.mp3'
-                if os.path.exists(new_filename):
-                    filename = new_filename
+        prompt = "اقترح عنواناً لقصة قصيرة مشوقة جداً (عنوان فقط بدون أي شرح أو مقدمات)"
+        response = ai_model.generate_content(prompt)
+        return response.text.strip()
+    except:
+        return "قصة غامضة من وراء الخيال"
 
-        with open(filename, 'rb') as f:
-            if action == 'video':
-                bot.send_video(call.message.chat.id, f, caption="تم التحميل بواسطة بوت فزعة 🛡️")
-            else:
-                bot.send_audio(call.message.chat.id, f, caption="تم تحويل الصوت بواسطة بوت فزعة 🛡️")
+async def get_ai_story(title):
+    try:
+        prompt = f"اكتب قصة قصيرة ومثيرة جداً بناءً على العنوان التالي: {title}. اجعل الأسلوب أدبي ممتع واستخدم ايموجي."
+        response = ai_model.generate_content(prompt)
+        return response.text
+    except:
+        return "عذراً، حدث خطأ أثناء تأليف القصة. حاول مجدداً."
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    title = await get_ai_title()
+    keyboard = [
+        [InlineKeyboardButton(f"📖 قراءة: {title}", callback_data=f"read|{title}")],
+        [InlineKeyboardButton("🔄 لا، أريد قصة أخرى", callback_data="next")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("✨ أهلاً بك في عالم القصص!\n\nهل تريد قصتك اليوم؟", reply_markup=reply_markup)
+
+async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "next":
+        title = await get_ai_title()
+        keyboard = [
+            [InlineKeyboardButton(f"📖 قراءة: {title}", callback_data=f"read|{title}")],
+            [InlineKeyboardButton("🔄 قصة أخرى", callback_data="next")]
+        ]
+        await query.edit_message_text(f"ما رأيك بهذا العنوان؟\n\n🔹 **{title}**", 
+                                  reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    
+    elif query.data.startswith("read|"):
+        title = query.data.split("|")[1]
+        await query.edit_message_text(f"⏳ جاري تأليف قصة: **{title}**... انتظر قليلاً ✨")
+        story_text = await get_ai_story(title)
         
-        if os.path.exists(filename):
-            os.remove(filename) 
+        keyboard = [[InlineKeyboardButton("🔄 قصة جديدة", callback_data="next")]]
+        await query.message.reply_text(f"📖 **{title}**\n\n{story_text}", 
+                                       reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-    except Exception as e:
-        error_msg = str(e)
-        if "Sign in to confirm" in error_msg:
-            bot.send_message(call.message.chat.id, "❌ يوتيوب طلب تسجيل دخول لسيرفراتنا. جرب رابط تيك توك أو فيسبوك حالياً.")
-        else:
-            bot.send_message(call.message.chat.id, f"❌ عذراً، صار خلل بالتحميل.\nالسبب: {error_msg[:100]}")
-
-bot.polling(none_stop=True)
+if __name__ == '__main__':
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(handle_buttons))
+    print("البوت يعمل الآن بنجاح...")
+    app.run_polling()
