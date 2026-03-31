@@ -12,64 +12,50 @@ logger = logging.getLogger(__name__)
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# وظيفة ذكية لاختيار الموديل المتاح في حسابك
-def get_working_model():
-    # قائمة بأسماء الموديلات المحتملة حسب تحديثات جوجل
-    models_to_try = [
-        'gemini-1.5-flash',
-        'gemini-pro',
-        'models/gemini-1.5-flash',
-        'models/gemini-pro'
-    ]
-    for m in models_to_try:
+# محاولة اختيار موديل متاح
+def get_model():
+    for m in ['gemini-1.5-flash', 'gemini-pro', 'models/gemini-1.5-flash']:
         try:
             model = genai.GenerativeModel(m)
-            # تجربة فحص بسيطة
-            model.generate_content("test", generation_config={"max_output_tokens": 1})
-            logger.info(f"✅ الموديل الشغال هو: {m}")
+            model.generate_content("hi", generation_config={"max_output_tokens": 1})
             return model
-        except:
-            continue
+        except: continue
     return None
 
-ai_model = get_working_model()
+ai_model = get_model()
 
 async def get_ai_response(prompt):
-    if not ai_model:
-        return "❌ خطأ: لم يتم العثور على موديل شغال في حسابك. تأكد من تفعيل Gemini API."
+    if not ai_model: return "❌ فشل الاتصال بالذكاء الاصطناعي."
     try:
         response = ai_model.generate_content(prompt)
-        return response.text
+        return response.text if response.text else "تعذر تأليف القصة."
     except Exception as e:
-        return f"⚠️ عذراً، واجهت مشكلة: {str(e)[:100]}"
+        return f"⚠️ خطأ: {str(e)[:50]}"
 
 # --- وظائف البوت ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    title = await get_ai_response("أعطني عنوان قصة قصير جدا (3 كلمات)")
-    keyboard = [[InlineKeyboardButton(f"📖 قراءة: {title}", callback_data=f"read|{title}")],
-                [InlineKeyboardButton("🔄 عنوان آخر", callback_data="next")]]
-    await update.message.reply_text(f"✨ هل تريد قصة اليوم؟\n\nالعنوان المقترح: **{title}**", 
-                                  reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    # نستخدم "read_now" كبيانات ثابتة للزر لتجنب خطأ الحجم
+    keyboard = [[InlineKeyboardButton("📖 قراءة قصة جديدة", callback_data="read_now")],
+                [InlineKeyboardButton("🔄 تغيير الموضوع", callback_data="start_again")]]
+    await update.message.reply_text("✨ أهلاً بك! هل أنت مستعد لقصة ذكاء اصطناعي مشوقة؟", 
+                                  reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    if query.data == "next":
-        title = await get_ai_response("عنوان قصة قصير جدا (3 كلمات)")
-        keyboard = [[InlineKeyboardButton(f"📖 قراءة: {title}", callback_data=f"read|{title}")],
-                    [InlineKeyboardButton("🔄 قصة أخرى", callback_data="next")]]
-        await query.edit_message_text(f"ما رأيك بهذا؟\n\n🔹 **{title}**", 
-                                     reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-    
-    elif query.data.startswith("read|"):
-        title = query.data.split("|")[1]
-        await query.edit_message_text(f"⏳ جاري كتابة قصة: **{title}**...")
-        story = await get_ai_response(f"اكتب قصة قصيرة جدا عن {title}")
-        await query.message.reply_text(f"📖 **{title}**\n\n{story}", 
-                                       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 قصة جديدة", callback_data="next")]]), 
-                                       parse_mode="Markdown")
+    if query.data in ["read_now", "start_again"]:
+        await query.edit_message_text("⏳ جاري التأليف... انتظر قليلاً ✨")
+        
+        # نطلب من الذكاء الاصطناعي تأليف قصة مباشرة
+        story = await get_ai_response("اكتب قصة قصيرة جدا ومشوقة مع عنوان جذاب وايموجي")
+        
+        keyboard = [[InlineKeyboardButton("🔄 قصة أخرى", callback_data="read_now")]]
+        
+        # إرسال القصة في رسالة جديدة لضمان عدم حدوث خطأ في الطول
+        await query.message.reply_text(f"{story}", 
+                                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 if __name__ == '__main__':
     app = Application.builder().token(TELEGRAM_TOKEN).build()
