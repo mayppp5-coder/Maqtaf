@@ -84,7 +84,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             titles = list(all_data[cat].keys())
             per_page = 5
             current_titles = titles[page_num*per_page : (page_num+1)*per_page]
-            keyboard = [[InlineKeyboardButton(f"✨ {t}", callback_data=f"listparts_{cat}_{t}")] for t in current_titles]
+            keyboard = [[InlineKeyboardButton(f"📌 {t}", callback_data=f"listparts_{cat}_{t}")] for t in current_titles]
             nav = []
             if page_num > 0: nav.append(InlineKeyboardButton("⬅️ السابق", callback_data=f"maincat_{cat}_{page_num-1}"))
             if (page_num+1)*per_page < len(titles): nav.append(InlineKeyboardButton("التالي ➡️", callback_data=f"maincat_{cat}_{page_num+1}"))
@@ -100,7 +100,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(parts) == 1:
             keyboard = [[InlineKeyboardButton("🔙 عودة", callback_data=f"maincat_{cat}_0")]]
             if len(parts[0]) > 1: keyboard.insert(0, [InlineKeyboardButton("تكملة البارت ⬇️", callback_data=f"read_{cat}_{title}_0_1")])
-            await query.edit_message_text(f"✨ **{title}**\n\n{parts[0][0]}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            await query.edit_message_text(f"📌 **{title}**\n\n{parts[0][0]}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         else:
             keyboard = [[InlineKeyboardButton(f"✨ البارت {i+1}", callback_data=f"read_{cat}_{title}_{i}_0")] for i in range(len(parts))]
             keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data=f"maincat_{cat}_0")])
