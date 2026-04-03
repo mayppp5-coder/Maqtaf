@@ -36,7 +36,6 @@ def get_stories_data():
             try:
                 found_cat = next((k for k in categories_keys if k in file), None)
                 if found_cat:
-                    # استخراج العنوان
                     title = file.split("_", 1)[1].replace(".txt", "").strip() if "_" in file else file.replace(found_cat, "").replace(".txt", "").strip()
                     title = re.sub(r'^[^\w\u0621-\u064A]+', '', title).strip()
                     
@@ -45,7 +44,7 @@ def get_stories_data():
                     with open(file, 'r', encoding='utf-8') as f:
                         content = f.read()
                         if not content.strip(): continue
-                        # فصل المحتوى بناءً على ===
+                        # التقسيم باستخدام === للأجزاء
                         parts = [p.strip() for p in content.split("===") if p.strip()]
                         library[found_cat][title] = parts
             except: pass
@@ -58,11 +57,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("📚 قصص خيالية", callback_data="c_خيالية")],
         [InlineKeyboardButton("📚 قصص رعب", callback_data="c_رعب")],
-        [InlineKeyboardButton("📚 قصص dينية", callback_data="c_دينية")],
+        [InlineKeyboardButton("📚 قصص دينية", callback_data="c_دينية")],
         [InlineKeyboardButton("📚 قصص حقيقية", callback_data="c_حقيقية")],
         [InlineKeyboardButton("📚 قصص تاريخية", callback_data="c_تاريخية")],
         [InlineKeyboardButton("📚 روايات", callback_data="c_روايات")],
-        [InlineKeyboardButton("💡 نصيحة اليوم", callback_data="direct_advice")] # تم تغيير الـ callback هنا
+        [InlineKeyboardButton("💡 نصيحة اليوم", callback_data="direct_advice")]
     ]
     if user_id == ADMIN_ID:
         keyboard.append([InlineKeyboardButton("📊 لوحة التحكم", callback_data="admin")])
@@ -78,43 +77,52 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     all_data = get_stories_data()
 
-    # لوحة التحكم
     if data == "admin" and user_id == ADMIN_ID:
         users_count = len(get_users_list())
         await query.edit_message_text(f"📊 **لوحة التحكم**\n\n👥 عدد المشتركين: `{users_count}`", 
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="home")]]), parse_mode="Markdown")
 
-    # نظام النصيحة المباشرة (بدون ظهور كلمة "اليوم")
     elif data == "direct_advice":
         if "نصيحة" in all_data:
             all_advices = []
             for t in all_data["نصيحة"]: all_advices.extend(all_data["نصيحة"][t])
             random_advice = random.choice(all_advices)
             await query.edit_message_text(f"{random_advice}", 
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔄 نصيحة أخرى", callback_data="direct_advice")],
-                    [InlineKeyboardButton("🔙 عودة", callback_data="home")]
-                ]))
-        else:
-            await query.edit_message_text("⚠️ لا توجد نصائح حالياً.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="home")]]))
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 نصيحة أخرى", callback_data="direct_advice")], [InlineKeyboardButton("🔙 عودة", callback_data="home")]]))
 
     elif data.startswith("c_"):
         cat = data.split("_")[1]
         if cat in all_data:
             titles = list(all_data[cat].keys())
-            keyboard = [[InlineKeyboardButton(f"🔹 {t}", callback_data=f"l_{cat}_{titles.index(t)}")] for t in titles]
+            # نرسل الـ Index 0 كبداية للجزء الأول
+            keyboard = [[InlineKeyboardButton(f"🔹 {t}", callback_data=f"l_{cat}_{titles.index(t)}_0")] for t in titles]
             keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="home")])
             await query.edit_message_text(f"📍 قسم: **{cat}**", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-        else:
-            await query.edit_message_text(f"⚠️ القسم فارغ.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="home")]]))
 
     elif data.startswith("l_"):
-        _, cat, t_idx = data.split("_")
+        parts_data = data.split("_")
+        cat = parts_data[1]
+        t_idx = int(parts_data[2])
+        p_idx = int(parts_data[3]) # رقم الجزء الحالي
+        
         titles = list(all_data[cat].keys())
-        title = titles[int(t_idx)]
-        content = all_data[cat][title][0]
-        await query.edit_message_text(f"🔹 **{title}**\n\n{content}", 
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data=f"c_{cat}")]]))
+        title = titles[t_idx]
+        all_parts = all_data[cat][title]
+        content = all_parts[p_idx]
+        
+        keyboard = []
+        # إذا كان هناك جزء تالي، أضف زر التكملة
+        if p_idx + 1 < len(all_parts):
+            keyboard.append([InlineKeyboardButton("✨ تكملة القصة", callback_data=f"l_{cat}_{t_idx}_{p_idx+1}")])
+        
+        # أزرار التنقل والعودة
+        nav_buttons = []
+        if p_idx > 0:
+            nav_buttons.append(InlineKeyboardButton("⬅️ السابق", callback_data=f"l_{cat}_{t_idx}_{p_idx-1}"))
+        nav_buttons.append(InlineKeyboardButton("🔙 عودة للقسم", callback_data=f"c_{cat}"))
+        keyboard.append(nav_buttons)
+        
+        await query.edit_message_text(f"🔹 **{title}** (جزء {p_idx+1})\n\n{content}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif data == "home": await start(update, context)
 
