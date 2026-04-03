@@ -11,40 +11,38 @@ USERS_FILE = "users.txt"
 
 logging.basicConfig(level=logging.INFO)
 
-# --- وظيفة جلب البيانات - النسخة النهائية الفائقة ---
 def get_stories_data():
     library = {}
-    # كلمات البحث الأساسية (أضفنا احتمالات الياء والألف المقصورة لضمان الدقة)
-    categories_keys = {
-        "خيالية": ["خيالية", "خياليه"],
+    # كلمات مفتاحية مرنة جداً
+    categories_map = {
+        "خيالية": ["خيالية", "خياليه", "خيال"],
         "رعب": ["رعب"],
-        "دينية": ["دينية", "دينيه"],
-        "حقيقية": ["حقيقية", "حقيقيه"],
-        "تاريخية": ["تاريخية", "تاريخيه"],
+        "دينية": ["دينية", "دينيه", "ديني"],
+        "حقيقية": ["حقيقية", "حقيقيه", "حقيقي"],
+        "تاريخية": ["تاريخية", "تاريخيه", "تاريخ"],
         "روايات": ["روايات", "رواية", "روايه"],
-        "نصيحة": ["نصيحة", "نصيحه"]
+        "نصيحة": ["نصيحة", "نصيحه", "نصيحه"]
     }
     
     for file in os.listdir():
         if file.endswith(".txt") and file != USERS_FILE:
             try:
                 found_cat_key = None
-                # بحث مرن عن القسم
-                for main_key, variations in categories_keys.items():
+                # البحث عن أي جزء من الكلمة داخل اسم الملف مهما كانت الرموز حوله
+                for main_key, variations in categories_map.items():
                     if any(v in file for v in variations):
                         found_cat_key = main_key
                         break
                 
                 if found_cat_key:
-                    # تنظيف اسم الملف لاستخراج العنوان
-                    # حذف النقاط والرموز من البداية والنهاية
-                    clean_filename = file.replace(".txt", "")
-                    if "_" in clean_filename:
-                        title = clean_filename.split("_", 1)[1].strip()
+                    # استخراج العنوان بدقة: حذف الـ .txt وأي رموز في البداية
+                    clean_name = file.replace(".txt", "")
+                    if "_" in clean_name:
+                        title = clean_name.split("_", 1)[1].strip()
                     else:
-                        title = clean_filename.replace(found_cat_key, "").strip()
+                        title = clean_name.replace(found_cat_key, "").strip()
                     
-                    # مسح أي رموز تبقت في العنوان (مثل النقاط)
+                    # تنظيف العنوان من النقطة أو أي رمز غريب في البداية
                     title = re.sub(r'^[^\w\u0621-\u064A]+', '', title).strip()
                     
                     if found_cat_key not in library: library[found_cat_key] = {}
@@ -54,12 +52,11 @@ def get_stories_data():
                         main_parts = content.split("NEXT_PART")
                         parsed_parts = [[page.strip() for page in p.split("===") if page.strip()] for p in main_parts if p.strip()]
                         library[found_cat_key][title] = parsed_parts
-                        logging.info(f"✅ تم تحميل: {title} في قسم {found_cat_key}")
+                        logging.info(f"✅ Successfully loaded: {title} in {found_cat_key}")
             except Exception as e:
-                logging.error(f"❌ خطأ في ملف {file}: {e}")
+                logging.error(f"❌ Error in file {file}: {e}")
     return library
 
-# --- الأوامر الأساسية ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     keyboard = [
@@ -80,7 +77,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.callback_query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-# --- معالجة الأزرار ---
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -97,17 +93,21 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             per_page = 5
             start_idx = page_num * per_page
             current_titles = titles[start_idx : start_idx + per_page]
+            
             keyboard = [[InlineKeyboardButton(f"✨ {t}", callback_data=f"listparts_{cat}_{t}")] for t in current_titles]
+            
             nav_buttons = []
             if page_num > 0:
                 nav_buttons.append(InlineKeyboardButton("⬅️ السابق", callback_data=f"maincat_{cat}_{page_num-1}"))
             if start_idx + per_page < len(titles):
                 nav_buttons.append(InlineKeyboardButton("التالي ➡️", callback_data=f"maincat_{cat}_{page_num+1}"))
+            
             if nav_buttons: keyboard.append(nav_buttons)
             keyboard.append([InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="back_home")])
             await query.edit_message_text(f"📍 قسم: **{cat}**", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         else:
-            await query.edit_message_text(f"⚠️ قسم **{cat}** لا يحتوي على ملفات حالياً.\nتأكد من تسمية الملف بـ (تاريخية_اسم القصة).", 
+            # رسالة تنبيهية للمساعدة في التشخيص
+            await query.edit_message_text(f"⚠️ قسم **{cat}** فارغ.\nتأكد أن اسم الملف يحتوي على كلمة {cat} متبوعة بـ _ ثم اسم القصة.", 
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="back_home")]]))
 
     elif data.startswith("listparts_"):
