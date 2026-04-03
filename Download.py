@@ -11,29 +11,36 @@ USERS_FILE = "users.txt"
 
 logging.basicConfig(level=logging.INFO)
 
-# --- وظائف جلب البيانات وتصحيح الأسماء ---
+# --- وظيفة جلب البيانات - نسخة فائقة الدقة ---
 def get_stories_data():
     library = {}
+    # كلمات البحث الأساسية لضمان الربط الصحيح
+    categories_keys = ["خيالية", "رعب", "دينية", "حقيقية", "تاريخية", "روايات", "نصيحة"]
+    
     for file in os.listdir():
-        if file.endswith(".txt") and "_" in file and file != USERS_FILE:
+        if file.endswith(".txt") and file != USERS_FILE:
             try:
-                # تنظيف اسم الملف من أي رموز غريبة أو نقاط في البداية لضمان ظهور "تاريخية"
-                clean_name = re.sub(r'^[^\w\u0621-\u064A]+', '', file.replace(".txt", ""))
+                # البحث عن الكلمة المفتاحية داخل اسم الملف مهما كان مكانه
+                found_cat = None
+                for key in categories_keys:
+                    if key in file:
+                        found_cat = key
+                        break
                 
-                if "_" in clean_name:
-                    category, title = clean_name.split("_", 1)
-                    category = category.strip()
-                    title = title.strip().replace("_", " ")
+                if found_cat:
+                    # استخراج العنوان: نحذف الكلمة المفتاحية والـ _ والـ .txt
+                    title = file.replace(f"{found_cat}_", "").replace(".txt", "")
+                    # تنظيف العنوان من أي رموز في البداية مثل النقاط
+                    title = re.sub(r'^[^\w\u0621-\u064A]+', '', title).strip()
                     
-                    if category not in library: library[category] = {}
+                    if found_cat not in library: library[found_cat] = {}
                     
                     with open(file, 'r', encoding='utf-8') as f:
                         content = f.read()
                         main_parts = content.split("NEXT_PART")
                         parsed_parts = [[page.strip() for page in p.split("===") if page.strip()] for p in main_parts if p.strip()]
-                        library[category][title] = parsed_parts
-            except Exception as e:
-                logging.error(f"Error reading file {file}: {e}")
+                        library[found_cat][title] = parsed_parts
+            except: pass
     return library
 
 # --- الأوامر الأساسية ---
@@ -77,7 +84,6 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             start_idx = page_num * per_page
             current_titles = titles[start_idx : start_idx + per_page]
             
-            # تم التغيير إلى إيموجي ✨ وأزرار عريضة
             keyboard = [[InlineKeyboardButton(f"✨ {t}", callback_data=f"listparts_{cat}_{t}")] for t in current_titles]
             
             nav_buttons = []
@@ -91,7 +97,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await query.edit_message_text(f"📍 قسم: **{cat}**", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         else:
-            await query.edit_message_text(f"⚠️ قسم **{cat}** فارغ حالياً.", 
+            await query.edit_message_text(f"⚠️ قسم **{cat}** فارغ حالياً أو لم يتم تسمية الملفات بشكل صحيح.", 
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="back_home")]]))
 
     elif data.startswith("listparts_"):
@@ -104,7 +110,6 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 keyboard.insert(0, [InlineKeyboardButton("تكملة البارت ⬇️", callback_data=f"read_{cat}_{title}_0_1")])
             await query.edit_message_text(f"✨ **{title}**\n\n{parts[0][0]}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         else:
-            # تم التغيير إلى إيموجي ✨ في قائمة البارتات
             keyboard = [[InlineKeyboardButton(f"✨ البارت {i+1}", callback_data=f"read_{cat}_{title}_{i}_0")] for i in range(len(parts))]
             keyboard.append([InlineKeyboardButton("🔙 عودة للقسم", callback_data=f"maincat_{cat}_0")])
             await query.edit_message_text(f"✨ رواية: **{title}**\nاختر البارت:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
