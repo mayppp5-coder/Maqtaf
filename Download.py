@@ -11,27 +11,33 @@ USERS_FILE = "users.txt"
 
 logging.basicConfig(level=logging.INFO)
 
-# --- وظيفة جلب البيانات - نسخة فائقة الدقة ---
+# --- وظيفة جلب البيانات - النسخة الفولاذية لفك التشفير ---
 def get_stories_data():
     library = {}
-    # كلمات البحث الأساسية لضمان الربط الصحيح
+    # كلمات البحث الأساسية
     categories_keys = ["خيالية", "رعب", "دينية", "حقيقية", "تاريخية", "روايات", "نصيحة"]
     
     for file in os.listdir():
+        # تجاهل الملفات غير النصية وملف المستخدمين
         if file.endswith(".txt") and file != USERS_FILE:
             try:
-                # البحث عن الكلمة المفتاحية داخل اسم الملف مهما كان مكانه
                 found_cat = None
+                # البحث عن الكلمة المفتاحية في أي مكان داخل اسم الملف (لحل مشكلة النقطة)
                 for key in categories_keys:
                     if key in file:
                         found_cat = key
                         break
                 
                 if found_cat:
-                    # استخراج العنوان: نحذف الكلمة المفتاحية والـ _ والـ .txt
-                    title = file.replace(f"{found_cat}_", "").replace(".txt", "")
-                    # تنظيف العنوان من أي رموز في البداية مثل النقاط
-                    title = re.sub(r'^[^\w\u0621-\u064A]+', '', title).strip()
+                    # استخراج العنوان بتنظيف كل ما قبل وبعد الكلمة المفتاحية
+                    # نبحث عن الجزء الذي بعد الـ (_)
+                    if "_" in file:
+                        title = file.split("_", 1)[1].replace(".txt", "").strip()
+                    else:
+                        title = file.replace(found_cat, "").replace(".txt", "").strip()
+                    
+                    # تنظيف العنوان من أي نقاط أو رموز تبقت في البداية
+                    title = re.sub(r'^[^\w\u0621-\u064A]+', '', title)
                     
                     if found_cat not in library: library[found_cat] = {}
                     
@@ -84,6 +90,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             start_idx = page_num * per_page
             current_titles = titles[start_idx : start_idx + per_page]
             
+            # أزرار عريضة ✨
             keyboard = [[InlineKeyboardButton(f"✨ {t}", callback_data=f"listparts_{cat}_{t}")] for t in current_titles]
             
             nav_buttons = []
@@ -97,7 +104,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await query.edit_message_text(f"📍 قسم: **{cat}**", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         else:
-            await query.edit_message_text(f"⚠️ قسم **{cat}** فارغ حالياً أو لم يتم تسمية الملفات بشكل صحيح.", 
+            await query.edit_message_text(f"⚠️ قسم **{cat}** فارغ حالياً.", 
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="back_home")]]))
 
     elif data.startswith("listparts_"):
@@ -119,12 +126,10 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         p_idx, s_idx = int(p_idx), int(s_idx)
         pages = all_data[cat][title][p_idx]
         keyboard = []
-        
         if s_idx + 1 < len(pages):
             keyboard.append([InlineKeyboardButton("تكملة البارت ⬇️", callback_data=f"read_{cat}_{title}_{p_idx}_{s_idx+1}")])
         elif p_idx + 1 < len(all_data[cat][title]):
             keyboard.append([InlineKeyboardButton("البارت التالي ⏭", callback_data=f"read_{cat}_{title}_{p_idx+1}_0")])
-        
         keyboard.append([InlineKeyboardButton("🔙 قائمة البارتات", callback_data=f"listparts_{cat}_{title}")])
         await query.edit_message_text(f"✨ **{title} - البارت {p_idx+1}**\n\n{pages[s_idx]}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
