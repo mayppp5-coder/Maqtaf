@@ -27,7 +27,7 @@ def get_users_list():
     with open(USERS_FILE, "r") as f:
         return f.read().splitlines()
 
-# --- جلب البيانات (كما هي في كودك الأصلي) ---
+# --- جلب البيانات ---
 def get_stories_data():
     library = {}
     categories_keys = ["خيالية", "رعب", "دينية", "حقيقية", "تاريخية", "روايات", "رسالة"]
@@ -42,7 +42,6 @@ def get_stories_data():
                     with open(file, 'r', encoding='utf-8') as f:
                         content = f.read()
                         if not content.strip(): continue
-                        # الحفاظ على نظامك الأصلي للتقسيم
                         main_parts = content.split("NEXT_PART")
                         library[found_cat][title] = [[p.strip() for p in part.split("===") if p.strip()] for part in main_parts if part.strip()]
             except: pass
@@ -59,7 +58,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📚 قصص حقيقية", callback_data="c_حقيقية_0")],
         [InlineKeyboardButton("📚 قصص تاريخية", callback_data="c_تاريخية_0")],
         [InlineKeyboardButton("📚 روايات", callback_data="c_روايات_0")],
-        [InlineKeyboardButton("✨ رسالة لك", callback_data="get_msg")]
+        [InlineKeyboardButton("✨ رسالة لك", callback_data="get_msg")],
+        [InlineKeyboardButton("📩 اقتراح قصة", callback_data="suggest_story")] # الخانة الجديدة
     ]
     if user_id == ADMIN_ID:
         keyboard.append([InlineKeyboardButton("📊 لوحة التحكم", callback_data="admin")])
@@ -79,31 +79,33 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users_count = len(get_users_list())
         await query.edit_message_text(f"📊 **لوحة التحكم**\n\n👥 عدد المشتركين الكلي: `{users_count}`", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="home")]]), parse_mode="Markdown")
 
-    # --- القسم الوحيد المعدل: رسالة لك ---
+    # --- قسم الاقتراحات الجديد ---
+    elif data == "suggest_story":
+        msg = "💡 **لديك قصة رهيبة أو فكرة جديدة؟**\n\nيمكنك إرسال اقتراحك مباشرة للمطور عبر الزر أدناه:"
+        # استبدال الرابط بـ tg://user?id=1077989275 ليفتح حسابك مباشرة
+        keyboard = [
+            [InlineKeyboardButton("👨‍💻 تواصل مع المطور", url=f"tg://user?id={ADMIN_ID}")],
+            [InlineKeyboardButton("🔙 عودة", callback_data="home")]
+        ]
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
     elif data == "get_msg":
         if "رسالة" in all_data:
             all_msgs = []
             for t in all_data["رسالة"]:
-                # تجميع كل الرسائل المفصولة بـ === أو NEXT_PART
                 for part in all_data["رسالة"][t]:
                     all_msgs.extend(part)
             random_msg = random.choice(all_msgs)
-            keyboard = [
-                [InlineKeyboardButton("✨ رسالة أخرى", callback_data="get_msg")],
-                [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="home")]
-            ]
+            keyboard = [[InlineKeyboardButton("✨ رسالة أخرى", callback_data="get_msg")], [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="home")]]
             await query.edit_message_text(f"{random_msg}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-        else:
-            await query.edit_message_text("⚠️ لا توجد رسائل حالياً.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="home")]]))
 
-    # --- باقي الأقسام (كما هي في كودك الأصلي بدون أي تغيير) ---
     elif data.startswith("c_"):
         _, cat, page_num = data.split("_")
         page_num = int(page_num)
         if cat in all_data:
             titles = list(all_data[cat].keys())
             per_page = 5
-            current_titles = titles[page_num*per_page : (page_num+1)*per_page]
+            current_titles = titles[page_num*per_page : (page_num+1)*page_num+per_page]
             keyboard = [[InlineKeyboardButton(f"🔹 {t}", callback_data=f"l_{cat}_{titles.index(t)}")] for t in current_titles]
             nav = []
             if page_num > 0: nav.append(InlineKeyboardButton("⬅️ السابق", callback_data=f"c_{cat}_{page_num-1}"))
