@@ -9,8 +9,8 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 # --- الإعدادات الأساسية ---
 TELEGRAM_TOKEN = "8616870028:AAET1lFcvbeU_BJ0ARsirgI9_5Fggxt7nsE"
 ADMIN_ID = 1077989275 
-CHANNEL_ID = "@Aqarani" 
-CHANNEL_URL = "https://t.me/Aqarani"
+CHANNEL_ID = "@Aqarani_" 
+CHANNEL_URL = "https://t.me/Aqarani_"
 USERS_FILE = "users.txt" 
 
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +30,7 @@ def get_users_list():
     with open(USERS_FILE, "r") as f:
         return f.read().splitlines()
 
-# --- جلب وتنسيق القصص تلقائياً ---
+# --- جلب القصص من الملفات المحلية ---
 def get_stories_data():
     library = {}
     categories_keys = ["خيالية", "رعب", "دينية", "حقيقية", "تاريخية", "روايات", "رسالة"]
@@ -50,24 +50,21 @@ def get_stories_data():
             except: pass
     return library
 
-# --- التحقق من الاشتراك الإجباري ---
+# --- التحقق من الاشتراك ---
 async def check_subscription(user_id, context):
     if user_id == ADMIN_ID: return True
     try:
         member = await context.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         return member.status in ["member", "administrator", "creator"]
-    except: return True 
+    except: return True
 
 # --- القائمة الرئيسية ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    
-    # رسالة الاشتراك الإجباري الجديدة
     if not await check_subscription(user_id, context):
         msg = ("🌿 مرحباً بك في بوت أقـراني\n\n"
                "حتى نكمل معك الحكاية، اشترك بالقناة أولاً ✨\n\n"
                "وبعدها اضغط “تحقق” لنفتح لك كل شيء بكل حب 🤍")
-        
         keyboard = [
             [InlineKeyboardButton("📢 اشترك في القناة", url=CHANNEL_URL)],
             [InlineKeyboardButton("✅ تحقق", callback_data="check_sub")]
@@ -79,7 +76,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     save_user(user_id)
     
-    # ترتيب الأزرار (2 في كل صف كما طلبت سابقاً)
+    # تصميم الأزرار (2 في كل صف)
     keyboard = [
         [InlineKeyboardButton("رعب 📚", callback_data="c_رعب_0"), InlineKeyboardButton("خيالية 📚", callback_data="c_خيالية_0")],
         [InlineKeyboardButton("حقيقية 📚", callback_data="c_حقيقية_0"), InlineKeyboardButton("دينية 📚", callback_data="c_دينية_0")],
@@ -95,7 +92,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message: await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     else: await update.callback_query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-# --- معالجة الأزرار والعمليات ---
+# --- معالجة الأزرار ---
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data, user_id = query.data, query.from_user.id
@@ -125,7 +122,8 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("✍️ أرسل رسالة الإذاعة الآن:")
 
     elif data == "suggest":
-        await query.edit_message_text("لإرسال اقتراحاتك، تواصل مع المطور:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👨‍💻 مقتدى", url=f"tg://user?id={ADMIN_ID}")], [InlineKeyboardButton("🔙 عودة", callback_data="home")]]))
+        # تغيير الاسم هنا إلى "المطور"
+        await query.edit_message_text("لإرسال اقتراحاتك، تواصل مع المطور:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👨‍💻 المطور", url=f"tg://user?id={ADMIN_ID}")], [InlineKeyboardButton("🔙 عودة", callback_data="home")]]))
 
     elif data == "get_msg":
         if "رسالة" in all_data:
