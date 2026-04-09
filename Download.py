@@ -6,11 +6,11 @@ import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-# --- الإعدادات الأساسية (تم تحديث التوكن الجديد) ---
+# --- الإعدادات الأساسية ---
 TELEGRAM_TOKEN = "8616870028:AAET1lFcvbeU_BJ0ARsirgI9_5Fggxt7nsE"
 ADMIN_ID = 1077989275 
-CHANNEL_ID = "@Aqarani_" 
-CHANNEL_URL = "https://t.me/Aqarani_"
+CHANNEL_ID = "@Aqarani" 
+CHANNEL_URL = "https://t.me/Aqarani"
 USERS_FILE = "users.txt" 
 
 logging.basicConfig(level=logging.INFO)
@@ -61,27 +61,37 @@ async def check_subscription(user_id, context):
 # --- القائمة الرئيسية ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    
+    # رسالة الاشتراك الإجباري الجديدة
     if not await check_subscription(user_id, context):
-        msg = ("✨ أهلاً بك في بوت أقـراني\n\n"
-               "حتى تقدر تستمتع بكل القصص والمحتوى، فقط اشترك بالقناة\n"
-               "وبعدها اضغط على “تحقق” وراح يفتح لك البوت بالكامل 🤍")
-        keyboard = [[InlineKeyboardButton("📢 اشترك في القناة", url=CHANNEL_URL)], [InlineKeyboardButton("✅ تحقق", callback_data="check_sub")]]
+        msg = ("🌿 مرحباً بك في بوت أقـراني\n\n"
+               "حتى نكمل معك الحكاية، اشترك بالقناة أولاً ✨\n\n"
+               "وبعدها اضغط “تحقق” لنفتح لك كل شيء بكل حب 🤍")
+        
+        keyboard = [
+            [InlineKeyboardButton("📢 اشترك في القناة", url=CHANNEL_URL)],
+            [InlineKeyboardButton("✅ تحقق", callback_data="check_sub")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         if update.message: await update.message.reply_text(msg, reply_markup=reply_markup)
         else: await update.callback_query.message.edit_text(msg, reply_markup=reply_markup)
         return
 
     save_user(user_id)
+    
+    # ترتيب الأزرار (2 في كل صف كما طلبت سابقاً)
     keyboard = [
-        [InlineKeyboardButton("📚 خيالية", callback_data="c_خيالية_0"), InlineKeyboardButton("📚 رعب", callback_data="c_رعب_0")],
-        [InlineKeyboardButton("📚 دينية", callback_data="c_دينية_0"), InlineKeyboardButton("📚 حقيقية", callback_data="c_حقيقية_0")],
-        [InlineKeyboardButton("📚 تاريخية", callback_data="c_تاريخية_0"), InlineKeyboardButton("📚 روايات", callback_data="c_روايات_0")],
-        [InlineKeyboardButton("✨ رسالة لك", callback_data="get_msg"), InlineKeyboardButton("📩 اقتراح", callback_data="suggest")]
+        [InlineKeyboardButton("رعب 📚", callback_data="c_رعب_0"), InlineKeyboardButton("خيالية 📚", callback_data="c_خيالية_0")],
+        [InlineKeyboardButton("حقيقية 📚", callback_data="c_حقيقية_0"), InlineKeyboardButton("دينية 📚", callback_data="c_دينية_0")],
+        [InlineKeyboardButton("روايات 📚", callback_data="c_روايات_0"), InlineKeyboardButton("تاريخية 📚", callback_data="c_تاريخية_0")],
+        [InlineKeyboardButton("رسالة لك ✨", callback_data="get_msg")],
+        [InlineKeyboardButton("📩 اقتراح قصة", callback_data="suggest")],
     ]
+    
     if user_id == ADMIN_ID:
         keyboard.append([InlineKeyboardButton("⚙️ لوحة التحكم", callback_data="admin_panel")])
     
-    msg = "🌟 **مرحباً بك في مكتبة أقراني**\n\nاختر القسم الذي ترغب في تصفحه:"
+    msg = "🌟 **مرحباً بك في مكتبة القصص**\n\nاختر القسم الذي ترغب في تصفحه:"
     if update.message: await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     else: await update.callback_query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
@@ -101,21 +111,21 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"⚙️ **لوحة التحكم**\n\n👥 عدد المشتركين: `{count}`"
         keyboard = [
             [InlineKeyboardButton("📣 إذاعة", callback_data="broadcast"), InlineKeyboardButton("📥 نسخة احتياطية", callback_data="backup")],
-            [InlineKeyboardButton("🔙 عودة", callback_data="home")]
+            [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="home")]
         ]
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif data == "backup" and user_id == ADMIN_ID:
         if os.path.exists(USERS_FILE):
-            await context.bot.send_document(chat_id=ADMIN_ID, document=open(USERS_FILE, 'rb'), caption="✅ نسخة احتياطية للمشتركين.\nانسخ الأرقام وضعها في GitHub قبل التحديث القادم.")
-        else: await query.answer("القائمة فارغة حالياً")
+            await context.bot.send_document(chat_id=ADMIN_ID, document=open(USERS_FILE, 'rb'), caption="✅ نسخة احتياطية للمشتركين.")
+        else: await query.answer("القائمة فارغة")
 
     elif data == "broadcast" and user_id == ADMIN_ID:
         context.user_data['waiting_broadcast'] = True
         await query.edit_message_text("✍️ أرسل رسالة الإذاعة الآن:")
 
     elif data == "suggest":
-        await query.edit_message_text("تواصل مع المطور للاقتراحات:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👨‍💻 مقتدى", url=f"tg://user?id={ADMIN_ID}")], [InlineKeyboardButton("🔙 عودة", callback_data="home")]]))
+        await query.edit_message_text("لإرسال اقتراحاتك، تواصل مع المطور:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👨‍💻 مقتدى", url=f"tg://user?id={ADMIN_ID}")], [InlineKeyboardButton("🔙 عودة", callback_data="home")]]))
 
     elif data == "get_msg":
         if "رسالة" in all_data:
@@ -151,7 +161,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         title = list(all_data[cat].keys())[t_idx]
         pages = all_data[cat][title][p_idx]
         kb = []
-        if s_idx+1 < len(pages): kb.append([InlineKeyboardButton("تكملة ⬇️", callback_data=f"r_{cat}_{t_idx}_{p_idx}_{s_idx+1}")])
+        if s_idx+1 < len(pages): kb.append([InlineKeyboardButton("التكملة ⬇️", callback_data=f"r_{cat}_{t_idx}_{p_idx}_{s_idx+1}")])
         elif p_idx+1 < len(all_data[cat][title]): kb.append([InlineKeyboardButton("البارت التالي ⏭", callback_data=f"r_{cat}_{t_idx}_{p_idx+1}_0")])
         kb.append([InlineKeyboardButton("🔙 القائمة", callback_data=f"l_{cat}_{t_idx}")])
         await query.edit_message_text(f"✨ **{title}**\n\n{pages[s_idx]}", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -161,12 +171,11 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id == ADMIN_ID and context.user_data.get('waiting_broadcast'):
         context.user_data['waiting_broadcast'] = False
-        text = update.message.text
         users = get_users_list()
         for u in users:
-            try: await context.bot.send_message(chat_id=u, text=f"📢 **رسالة من الإدارة:**\n\n{text}", parse_mode="Markdown")
+            try: await context.bot.send_message(chat_id=u, text=f"📢 **رسالة من الإدارة:**\n\n{update.message.text}", parse_mode="Markdown")
             except: pass
-        await update.message.reply_text("✅ تم الإرسال بنجاح.")
+        await update.message.reply_text("✅ تم الإرسال.")
 
 if __name__ == '__main__':
     app = Application.builder().token(TELEGRAM_TOKEN).build()
