@@ -7,10 +7,10 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 # --- الإعدادات الأساسية ---
-TELEGRAM_TOKEN = "8669525251:AAGQSRVc_0_jEiZJnX7p_KoVAoULuukXS0s"
+TELEGRAM_TOKEN = "8616870028:AAET1lFcvbeU_BJ0ARsirgI9_5Fggxt7nsE"
 ADMIN_ID = 1077989275 
-CHANNEL_ID = "@Aqarani_" 
-CHANNEL_URL = "https://t.me/Aqarani_"
+CHANNEL_ID = "@Aqarani" 
+CHANNEL_URL = "https://t.me/Aqarani"
 
 # الحفظ في المجلد الرئيسي مباشرة (لأن الـ Volume غير متاح عندك)
 USERS_FILE = "users.txt" 
