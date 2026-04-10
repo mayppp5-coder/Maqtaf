@@ -10,8 +10,8 @@ from telegram.error import BadRequest
 # --- الإعدادات الأساسية ---
 TELEGRAM_TOKEN = "8616870028:AAET1lFcvbeU_BJ0ARsirgI9_5Fggxt7nsE"
 ADMIN_ID = 1077989275 
-CHANNEL_ID = "@Aqarani_" 
-CHANNEL_URL = "https://t.me/Aqarani_"
+CHANNEL_ID = "@Aqarani" 
+CHANNEL_URL = "https://t.me/Aqarani"
 USERS_FILE = "users.txt" 
 
 logging.basicConfig(level=logging.INFO)
