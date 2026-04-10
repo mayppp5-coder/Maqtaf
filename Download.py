@@ -5,12 +5,13 @@ import random
 import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from telegram.error import BadRequest
 
 # --- الإعدادات الأساسية ---
 TELEGRAM_TOKEN = "8616870028:AAET1lFcvbeU_BJ0ARsirgI9_5Fggxt7nsE"
 ADMIN_ID = 1077989275 
-CHANNEL_ID = "@Aqarani" 
-CHANNEL_URL = "https://t.me/Aqarani"
+CHANNEL_ID = "@Aqarani_" 
+CHANNEL_URL = "https://t.me/Aqarani_"
 USERS_FILE = "users.txt" 
 
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +31,7 @@ def get_users_list():
     with open(USERS_FILE, "r") as f:
         return f.read().splitlines()
 
-# --- جلب القصص من الملفات المحلية ---
+# --- جلب القصص وتنسيقها ---
 def get_stories_data():
     library = {}
     categories_keys = ["خيالية", "رعب", "دينية", "حقيقية", "تاريخية", "روايات", "رسالة"]
@@ -45,18 +46,20 @@ def get_stories_data():
                     with open(file, 'r', encoding='utf-8') as f:
                         content = f.read()
                         if not content.strip(): continue
+                        # تقسيم القصة بناءً على NEXT_PART
                         main_parts = content.split("NEXT_PART")
+                        # كل جزء (Part) يتم تقسيمه لصفحات (Pages) بناءً على ===
                         library[found_cat][title] = [[p.strip() for p in part.split("===") if p.strip()] for part in main_parts if part.strip()]
             except: pass
     return library
 
-# --- التحقق من الاشتراك ---
+# --- التحقق من الاشتراك الإجباري ---
 async def check_subscription(user_id, context):
     if user_id == ADMIN_ID: return True
     try:
         member = await context.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         return member.status in ["member", "administrator", "creator"]
-    except: return True
+    except: return False
 
 # --- القائمة الرئيسية ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -65,26 +68,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = ("🌿 مرحباً بك في بوت أقـراني\n\n"
                "حتى نكمل معك الحكاية، اشترك بالقناة أولاً ✨\n\n"
                "وبعدها اضغط “تحقق” لنفتح لك كل شيء بكل حب 🤍")
-        keyboard = [
-            [InlineKeyboardButton("📢 اشترك في القناة", url=CHANNEL_URL)],
-            [InlineKeyboardButton("✅ تحقق", callback_data="check_sub")]
-        ]
+        keyboard = [[InlineKeyboardButton("📢 اشترك في القناة", url=CHANNEL_URL)], [InlineKeyboardButton("✅ تحقق", callback_data="check_sub")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         if update.message: await update.message.reply_text(msg, reply_markup=reply_markup)
         else: await update.callback_query.message.edit_text(msg, reply_markup=reply_markup)
         return
 
     save_user(user_id)
-    
-    # تصميم الأزرار (2 في كل صف)
     keyboard = [
         [InlineKeyboardButton("رعب 📚", callback_data="c_رعب_0"), InlineKeyboardButton("خيالية 📚", callback_data="c_خيالية_0")],
         [InlineKeyboardButton("حقيقية 📚", callback_data="c_حقيقية_0"), InlineKeyboardButton("دينية 📚", callback_data="c_دينية_0")],
         [InlineKeyboardButton("روايات 📚", callback_data="c_روايات_0"), InlineKeyboardButton("تاريخية 📚", callback_data="c_تاريخية_0")],
         [InlineKeyboardButton("رسالة لك ✨", callback_data="get_msg")],
-        [InlineKeyboardButton("📩 اقتراح قصة", callback_data="suggest")],
+        [InlineKeyboardButton("📩 اقتراح قصة", callback_data="suggest")]
     ]
-    
     if user_id == ADMIN_ID:
         keyboard.append([InlineKeyboardButton("⚙️ لوحة التحكم", callback_data="admin_panel")])
     
@@ -96,40 +93,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data, user_id = query.data, query.from_user.id
-    await query.answer()
     all_data = get_stories_data()
 
     if data == "check_sub":
-        if await check_subscription(user_id, context): await start(update, context)
-        else: await query.answer("❌ أنت غير مشترك في القناة بعد!", show_alert=True)
+        if await check_subscription(user_id, context):
+            await query.answer("✅ تم التحقق!")
+            await start(update, context)
+        else: await query.answer("❌ اشترك أولاً!", show_alert=True)
+        return
+
+    await query.answer()
+
+    if data == "home": await start(update, context)
 
     elif data == "admin_panel" and user_id == ADMIN_ID:
         count = len(get_users_list())
         msg = f"⚙️ **لوحة التحكم**\n\n👥 عدد المشتركين: `{count}`"
-        keyboard = [
-            [InlineKeyboardButton("📣 إذاعة", callback_data="broadcast"), InlineKeyboardButton("📥 نسخة احتياطية", callback_data="backup")],
-            [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="home")]
-        ]
+        keyboard = [[InlineKeyboardButton("📣 إذاعة", callback_data="broadcast"), InlineKeyboardButton("📥 نسخة احتياطية", callback_data="backup")], [InlineKeyboardButton("🔙 عودة", callback_data="home")]]
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-    elif data == "backup" and user_id == ADMIN_ID:
-        if os.path.exists(USERS_FILE):
-            await context.bot.send_document(chat_id=ADMIN_ID, document=open(USERS_FILE, 'rb'), caption="✅ نسخة احتياطية للمشتركين.")
-        else: await query.answer("القائمة فارغة")
-
-    elif data == "broadcast" and user_id == ADMIN_ID:
-        context.user_data['waiting_broadcast'] = True
-        await query.edit_message_text("✍️ أرسل رسالة الإذاعة الآن:")
-
     elif data == "suggest":
-        # تغيير الاسم هنا إلى "المطور"
         await query.edit_message_text("لإرسال اقتراحاتك، تواصل مع المطور:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👨‍💻 المطور", url=f"tg://user?id={ADMIN_ID}")], [InlineKeyboardButton("🔙 عودة", callback_data="home")]]))
-
-    elif data == "get_msg":
-        if "رسالة" in all_data:
-            all_msgs = [m for t in all_data["رسالة"] for p in all_data["رسالة"][t] for m in p]
-            await query.edit_message_text(f"💌 **رسالة لك:**\n\n{random.choice(all_msgs)}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✨ رسالة أخرى", callback_data="get_msg")], [InlineKeyboardButton("🔙 عودة", callback_data="home")]]), parse_mode="Markdown")
-        else: await query.answer("لا توجد رسائل حالياً")
 
     elif data.startswith("c_"):
         _, cat, p_num = data.split("_")
@@ -147,11 +131,22 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("l_"):
         _, cat, t_idx = data.split("_", 2)
-        title = list(all_data[cat].keys())[int(t_idx)]
+        t_idx = int(t_idx)
+        title = list(all_data[cat].keys())[t_idx]
         parts = all_data[cat][title]
-        kb = [[InlineKeyboardButton(f"✨ البارت {i+1}", callback_data=f"r_{cat}_{t_idx}_{i}_0")] for i in range(len(parts))]
-        kb.append([InlineKeyboardButton("🔙 عودة", callback_data=f"c_{cat}_0")])
-        await query.edit_message_text(f"📖 **{title}**\nاختر البارت:", reply_markup=InlineKeyboardMarkup(kb))
+        
+        # التعديل هنا: إذا كانت القصة جزءاً واحداً فقط، تفتح مباشرة
+        if len(parts) == 1:
+            await query.edit_message_text(f"✨ **{title}**\n\n{parts[0][0]}", 
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("التكملة ⬇️", callback_data=f"r_{cat}_{t_idx}_0_1")] if len(parts[0]) > 1 else [],
+                    [InlineKeyboardButton("🔙 القائمة", callback_data=f"c_{cat}_0")]
+                ]), parse_mode="Markdown")
+        else:
+            # إذا كانت أكثر من جزء (بسبب وجود NEXT_PART)
+            kb = [[InlineKeyboardButton(f"✨ البارت {i+1}", callback_data=f"r_{cat}_{t_idx}_{i}_0")] for i in range(len(parts))]
+            kb.append([InlineKeyboardButton("🔙 عودة", callback_data=f"c_{cat}_0")])
+            await query.edit_message_text(f"📖 **{title}**\nاختر البارت:", reply_markup=InlineKeyboardMarkup(kb))
 
     elif data.startswith("r_"):
         _, cat, t_idx, p_idx, s_idx = data.split("_", 4)
@@ -161,16 +156,17 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = []
         if s_idx+1 < len(pages): kb.append([InlineKeyboardButton("التكملة ⬇️", callback_data=f"r_{cat}_{t_idx}_{p_idx}_{s_idx+1}")])
         elif p_idx+1 < len(all_data[cat][title]): kb.append([InlineKeyboardButton("البارت التالي ⏭", callback_data=f"r_{cat}_{t_idx}_{p_idx+1}_0")])
-        kb.append([InlineKeyboardButton("🔙 القائمة", callback_data=f"l_{cat}_{t_idx}")])
+        
+        # الرجوع للقائمة الرئيسية للقسم إذا كانت جزءاً واحداً، أو قائمة البارتات إذا كانت متعددة
+        back_data = f"c_{cat}_0" if len(all_data[cat][title]) == 1 else f"l_{cat}_{t_idx}"
+        kb.append([InlineKeyboardButton("🔙 القائمة", callback_data=back_data)])
+        
         await query.edit_message_text(f"✨ **{title}**\n\n{pages[s_idx]}", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-
-    elif data == "home": await start(update, context)
 
 async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id == ADMIN_ID and context.user_data.get('waiting_broadcast'):
         context.user_data['waiting_broadcast'] = False
-        users = get_users_list()
-        for u in users:
+        for u in get_users_list():
             try: await context.bot.send_message(chat_id=u, text=f"📢 **رسالة من الإدارة:**\n\n{update.message.text}", parse_mode="Markdown")
             except: pass
         await update.message.reply_text("✅ تم الإرسال.")
@@ -181,3 +177,4 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(handle_buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_handler))
     app.run_polling()
+
