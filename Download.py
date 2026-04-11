@@ -5,7 +5,7 @@ import random
 import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Conflict
 
 # --- الإعدادات الأساسية ---
 TELEGRAM_TOKEN = "8616870028:AAET1lFcvbeU_BJ0ARsirgI9_5Fggxt7nsE"
@@ -31,7 +31,7 @@ def get_users_list():
     with open(USERS_FILE, "r") as f:
         return f.read().splitlines()
 
-# --- جلب القصص وتنسيقها ---
+# --- جلب القصص ---
 def get_stories_data():
     library = {}
     categories_keys = ["خيالية", "رعب", "دينية", "حقيقية", "تاريخية", "روايات", "رسالة"]
@@ -46,14 +46,11 @@ def get_stories_data():
                     with open(file, 'r', encoding='utf-8') as f:
                         content = f.read()
                         if not content.strip(): continue
-                        # تقسيم القصة بناءً على NEXT_PART
                         main_parts = content.split("NEXT_PART")
-                        # كل جزء (Part) يتم تقسيمه لصفحات (Pages) بناءً على ===
                         library[found_cat][title] = [[p.strip() for p in part.split("===") if p.strip()] for part in main_parts if part.strip()]
             except: pass
     return library
 
-# --- التحقق من الاشتراك الإجباري ---
 async def check_subscription(user_id, context):
     if user_id == ADMIN_ID: return True
     try:
@@ -65,13 +62,10 @@ async def check_subscription(user_id, context):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not await check_subscription(user_id, context):
-        msg = ("🌿 مرحباً بك في بوت أقـراني\n\n"
-               "حتى نكمل معك الحكاية، اشترك بالقناة أولاً ✨\n\n"
-               "وبعدها اضغط “تحقق” لنفتح لك كل شيء بكل حب 🤍")
+        msg = ("🌿 مرحباً بك في بوت أقـراني\n\nحتى نكمل معك الحكاية، اشترك بالقناة أولاً ✨\n\nوبعدها اضغط “تحقق” لنفتح لك كل شيء بكل حب 🤍")
         keyboard = [[InlineKeyboardButton("📢 اشترك في القناة", url=CHANNEL_URL)], [InlineKeyboardButton("✅ تحقق", callback_data="check_sub")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        if update.message: await update.message.reply_text(msg, reply_markup=reply_markup)
-        else: await update.callback_query.message.edit_text(msg, reply_markup=reply_markup)
+        if update.message: await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+        else: await update.callback_query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
     save_user(user_id)
@@ -104,13 +98,23 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer()
 
-    if data == "home": await start(update, context)
-
-    elif data == "admin_panel" and user_id == ADMIN_ID:
+    if data == "admin_panel" and user_id == ADMIN_ID:
         count = len(get_users_list())
         msg = f"⚙️ **لوحة التحكم**\n\n👥 عدد المشتركين: `{count}`"
-        keyboard = [[InlineKeyboardButton("📣 إذاعة", callback_data="broadcast"), InlineKeyboardButton("📥 نسخة احتياطية", callback_data="backup")], [InlineKeyboardButton("🔙 عودة", callback_data="home")]]
+        keyboard = [
+            [InlineKeyboardButton("📣 إذاعة", callback_data="broadcast"), InlineKeyboardButton("📥 نسخة احتياطية", callback_data="backup")],
+            [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="home")]
+        ]
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif data == "backup" and user_id == ADMIN_ID:
+        if os.path.exists(USERS_FILE):
+            await context.bot.send_document(chat_id=ADMIN_ID, document=open(USERS_FILE, 'rb'), caption=f"✅ نسخة احتياطية للمشتركين.\nعدد المشتركين الحالي: {len(get_users_list())}")
+        else: await query.answer("القائمة فارغة")
+
+    elif data == "broadcast" and user_id == ADMIN_ID:
+        context.user_data['waiting_broadcast'] = True
+        await query.edit_message_text("✍️ **أرسل الآن الرسالة التي تريد إذاعتها للجميع:**\n(يمكنك إرسال نص فقط حالياً)")
 
     elif data == "suggest":
         await query.edit_message_text("لإرسال اقتراحاتك، تواصل مع المطور:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👨‍💻 المطور", url=f"tg://user?id={ADMIN_ID}")], [InlineKeyboardButton("🔙 عودة", callback_data="home")]]))
@@ -134,16 +138,10 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         t_idx = int(t_idx)
         title = list(all_data[cat].keys())[t_idx]
         parts = all_data[cat][title]
-        
-        # التعديل هنا: إذا كانت القصة جزءاً واحداً فقط، تفتح مباشرة
         if len(parts) == 1:
             await query.edit_message_text(f"✨ **{title}**\n\n{parts[0][0]}", 
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("التكملة ⬇️", callback_data=f"r_{cat}_{t_idx}_0_1")] if len(parts[0]) > 1 else [],
-                    [InlineKeyboardButton("🔙 القائمة", callback_data=f"c_{cat}_0")]
-                ]), parse_mode="Markdown")
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("التكملة ⬇️", callback_data=f"r_{cat}_{t_idx}_0_1")] if len(parts[0]) > 1 else [], [InlineKeyboardButton("🔙 القائمة", callback_data=f"c_{cat}_0")]]), parse_mode="Markdown")
         else:
-            # إذا كانت أكثر من جزء (بسبب وجود NEXT_PART)
             kb = [[InlineKeyboardButton(f"✨ البارت {i+1}", callback_data=f"r_{cat}_{t_idx}_{i}_0")] for i in range(len(parts))]
             kb.append([InlineKeyboardButton("🔙 عودة", callback_data=f"c_{cat}_0")])
             await query.edit_message_text(f"📖 **{title}**\nاختر البارت:", reply_markup=InlineKeyboardMarkup(kb))
@@ -156,25 +154,36 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = []
         if s_idx+1 < len(pages): kb.append([InlineKeyboardButton("التكملة ⬇️", callback_data=f"r_{cat}_{t_idx}_{p_idx}_{s_idx+1}")])
         elif p_idx+1 < len(all_data[cat][title]): kb.append([InlineKeyboardButton("البارت التالي ⏭", callback_data=f"r_{cat}_{t_idx}_{p_idx+1}_0")])
-        
-        # الرجوع للقائمة الرئيسية للقسم إذا كانت جزءاً واحداً، أو قائمة البارتات إذا كانت متعددة
         back_data = f"c_{cat}_0" if len(all_data[cat][title]) == 1 else f"l_{cat}_{t_idx}"
         kb.append([InlineKeyboardButton("🔙 القائمة", callback_data=back_data)])
-        
         await query.edit_message_text(f"✨ **{title}**\n\n{pages[s_idx]}", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
-async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    elif data == "home": await start(update, context)
+
+# --- معالجة رسائل الإذاعة ---
+async def broadcast_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id == ADMIN_ID and context.user_data.get('waiting_broadcast'):
         context.user_data['waiting_broadcast'] = False
-        for u in get_users_list():
-            try: await context.bot.send_message(chat_id=u, text=f"📢 **رسالة من الإدارة:**\n\n{update.message.text}", parse_mode="Markdown")
-            except: pass
-        await update.message.reply_text("✅ تم الإرسال.")
+        text = update.message.text
+        users = get_users_list()
+        sent, fail = 0, 0
+        status_msg = await update.message.reply_text(f"⏳ جاري الإذاعة لـ {len(users)} مشترك...")
+        
+        for u in users:
+            try:
+                await context.bot.send_message(chat_id=u, text=f"📢 **إعلان جديد من أقـراني:**\n\n{text}", parse_mode="Markdown")
+                sent += 1
+            except: fail += 1
+            await asyncio.sleep(0.05) # لتجنب حظر تليجرام
+            
+        await status_msg.edit_text(f"✅ تم انتهاء الإذاعة:\n\n✔️ نجاح: {sent}\n❌ فشل: {fail}")
 
 if __name__ == '__main__':
+    # حل مشكلة Conflict (تضارب النسخ)
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_handler))
-    app.run_polling()
-
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_msg))
+    
+    print("البوت يعمل الآن...")
+    app.run_polling(drop_pending_updates=True) # يتجاهل الرسائل القديمة عند التشغيل لمنع التعليق
